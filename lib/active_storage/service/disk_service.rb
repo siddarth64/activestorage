@@ -58,12 +58,29 @@ class ActiveStorage::Service::DiskService < ActiveStorage::Service
       verified_key_with_expiration = ActiveStorage.verifier.generate(key, expires_in: expires_in, purpose: :blob_key)
 
       generated_url =
-        if defined?(Rails) && defined?(Rails.application)
+        if defined?(Rails.application)
           Rails.application.routes.url_helpers.rails_disk_blob_path \
             verified_key_with_expiration,
             disposition: disposition, filename: filename, content_type: content_type
         else
           "/rails/active_storage/disk/#{verified_key_with_expiration}/#{filename}?disposition=#{disposition}&content_type=#{content_type}"
+        end
+
+      payload[:url] = generated_url
+
+      generated_url
+    end
+  end
+
+  def url_for_direct_upload(key, expires_in:, content_type:, content_length:, checksum:)
+    instrument :url, key do |payload|
+      verified_metadata_with_expiration = ActiveStorage.verifier.generate({ key: key, checksum: checksum }, expires_in: expires_in, purpose: :blob_metadata)
+
+      generated_url =
+        if defined?(Rails.application)
+          Rails.application.routes.url_helpers.update_rails_disk_blob_path verified_metadata_with_expiration
+        else
+          "/rails/active_storage/disk/#{verified_metadata_with_expiration}"
         end
 
       payload[:url] = generated_url
@@ -87,6 +104,7 @@ class ActiveStorage::Service::DiskService < ActiveStorage::Service
 
     def ensure_integrity_of(key, checksum)
       unless Digest::MD5.file(path_for(key)).base64digest == checksum
+        delete key
         raise ActiveStorage::IntegrityError
       end
     end

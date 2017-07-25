@@ -12,6 +12,16 @@ class ActiveStorage::DiskController < ActionController::Base
     end
   end
 
+  def update
+    if metadata = decode_verified_metadata
+      disk_service.upload metadata[:key], request.body, checksum: metadata[:checksum]
+    else
+      head :not_found
+    end
+  rescue ActiveStorage::IntegrityError
+    head :unprocessable_entity
+  end
+
   private
     def disk_service
       ActiveStorage::Blob.service
@@ -19,6 +29,10 @@ class ActiveStorage::DiskController < ActionController::Base
 
     def decode_verified_key
       ActiveStorage.verifier.verified(params[:encoded_key], purpose: :blob_key)
+    end
+
+    def decode_verified_metadata
+      ActiveStorage.verifier.verified(params[:encoded_metadata], purpose: :blob_metadata)
     end
 
     def disposition_param
